@@ -1,0 +1,104 @@
+---
+workflow:
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH == "master"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+
+stages:
+  - dockerfile_linter
+  - merge_request_build
+  - master_build
+
+variables:
+  GIT_STRATEGY: clone
+  MR_TAG: "stage"  # $CI_PIPELINE_ID
+  MASTER_TAG: "latest"
+  # CM_REGISTRY_HOST: group_var
+  # CM_REGISTRY_CRED: group_var
+  # CM_REGISTRY_USER: group_var
+  # CM_REGISTRY_PASS: group_var
+
+image:
+  name: nexus-registry.azulsystems.com/zing/kaniko:latest
+  entrypoint: [""]
+
+###########
+# Extends #
+###########
+
+.tags:
+  tags:
+    - amd64
+    - k8s
+    - large
+    - prime
+
+.linter:
+  stage: dockerfile_linter
+  image: curlimages/curl:7.75.0
+  script:
+    - curl -s -L https://<_PATH_>/hadolint-Linux-x86_64 -o $CI_PROJECT_DIR/hadolint
+    - chmod +x $CI_PROJECT_DIR/hadolint
+    - echo "Linting file ${CM_IMAGE}"
+    - ./hadolint ./Dockerfile*
+  extends: .tags
+
+.merge_request_build:
+  stage: merge_request_build
+  script:
+    - echo ${CM_REGISTRY_CRED} | base64 -d > /kaniko/.docker/config.json
+    - /kaniko/executor
+        --context ${CI_PROJECT_DIR}/
+        --dockerfile ${CI_PROJECT_DIR}/Dockerfile
+        --destination ${CM_REGISTRY_HOST}/devops/${CM_IMAGE}:${MR_TAG}
+        --cache
+        --cache-dir /cache
+        --cache-ttl 336h
+        --build-arg CM_TAG=${MR_TAG}
+    - echo "docker run -it --rm ${CM_REGISTRY_HOST}/devops/${CM_IMAGE}:${MR_TAG} sh"
+  extends: .tags
+
+.master_deploy:
+  stage: master_build
+  script:
+    - echo ${CM_REGISTRY_CRED} | base64 -d > /kaniko/.docker/config.json
+    - /kaniko/executor
+        --context ${CI_PROJECT_DIR}/
+        --dockerfile ${CI_PROJECT_DIR}/Dockerfile
+        --destination ${CM_REGISTRY_HOST}/devops/${CM_IMAGE}:${MASTER_TAG}
+        --cache
+        --cache-dir /cache
+        --cache-ttl 336h
+        --push-retry 1
+        --build-arg CM_TAG=${MASTER_TAG}
+    - echo "docker run -it --rm ${CM_REGISTRY_HOST}/devops/${CM_IMAGE}:${MASTER_TAG} sh"
+  extends: .tags
+
+########
+# Jobs #
+########
+train_linter:
+  variables:
+    CM_IMAGE: train
+  rules:
+    - when: on_success
+  extends: .linter
+
+train_MR:
+  variables:
+    CM_IMAGE: train
+  rules:
+    - when: on_success
+  needs:
+   - "train_linter"
+  extends: .merge_request_build
+
+train_MASTER:
+  variables:
+    CM_IMAGE: train
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+  extends: .master_deploy
+

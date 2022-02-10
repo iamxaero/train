@@ -1,0 +1,17 @@
+# temp files
+*~
+.swp
+
+# others
+
+*.log
+.private
+.prv
+.retry
+vagrant.retry
+.vagrant
+.vault
+.vscode
+generated_inventory
+__pycache__
+/venv/

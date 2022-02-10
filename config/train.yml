@@ -1,0 +1,22 @@
+# Example
+projects:                                 # list number prodjects for proccessing
+  - 1
+  - 2
+approved: True                            # Check Approvels 
+note_mr_approved: push                    # Keyword to start the queue 
+strategy: jobs                            # strategy - jobs start or create new pipline with variable
+url: https://gitlab.com/
+token:                                    # test token
+
+# Queue settings
+limit: 50                                 # sort: order (asc or desc)
+sort: desc                                # order_by: sort by created_at or updated_at
+order_by: created_at                      # state: state of the MR. It can be one of all, merged, opened or closed
+state: opened                             # ...
+
+# For test
+rebase: True
+merge: True
+
+interval: 10                               # in sec, the time between
+job_per_req: 200
